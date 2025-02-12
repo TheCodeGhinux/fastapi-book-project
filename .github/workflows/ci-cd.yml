@@ -1,0 +1,64 @@
+name: CI/CD Pipeline
+
+on:
+  pull_request:
+    branches:
+      - main  # Runs tests on pull requests to the main branch
+  push:
+    branches:
+      - main  # Deploys automatically when changes are merged to main
+
+jobs:
+  # CI: Run Tests on PR
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.10"
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run Tests
+        run: pytest
+     
+  # CD: Deploy on Merge to Main
+  deploy:
+    needs: test  # Only runs if tests pass
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.10"
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Deploy Application
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+          SSH_KEY: ${{ secrets.SSH_KEY }}
+        run: |
+          echo "$SSH_KEY" > deploy_key && chmod 600 deploy_key
+          ssh -o StrictHostKeyChecking=no -i deploy_key $SSH_USER@$SSH_HOST << 'EOF'
+            cd /home/ubuntu/hng12/book-api/app
+            git pull origin main
+            source venv/bin/activate
+            pip install -r requirements.txt
+            systemctl restart ubuntu
+          EOF
